@@ -13,6 +13,7 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5175',
   'https://topdigital.netlify.app',
+  'https://rivetsking.com',
 ];
 app.use(
   cors({
