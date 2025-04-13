@@ -52,18 +52,18 @@ pool
 
 // Nodemailer setup
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // Ensures port 587 and proper TLS
+  service: 'gmail', // Uses port 587 with STARTTLS
   auth: {
     user: config.email.user, // intopdigital.com@gmail.com
     pass: config.email.pass, // ivhd ciju xydc mwef
   },
-  debug: true, // Keep for debugging
+  debug: true,
   logger: true,
-  pool: true, // Reuse connections
-  maxConnections: 1, // Avoid rate limits
-  rateLimit: 5, // Max 5 messages per second
+  pool: true,
+  maxConnections: 1,
+  rateLimit: 5,
   tls: {
-    rejectUnauthorized: false, // Temporary bypass for certificate issue
+    rejectUnauthorized: false, // Temporary bypass
   },
 });
 
@@ -153,19 +153,19 @@ app.post('/api/submit', async (req, res) => {
           from: `"Top Digital" <${config.email.user}>`,
           to: email,
           replyTo: config.email.user,
-          subject: `Thank You, ${name}, for Reaching Out!`, // Personalized for inbox
+          subject: `Hi ${name}, Thanks for Contacting Top Digital!`,
           html: `
             <h2>Hello ${name},</h2>
-            <p>Thank you for contacting Top Digital! We’ve received your submission and will respond within 24-48 hours.</p>
-            <p><strong>Your Submission:</strong></p>
+            <p>Thank you for reaching out to Top Digital! We’ve received your submission and will get back to you within 24 hours.</p>
+            <p><strong>Your Details:</strong></p>
             <ul>
               <li><strong>Company:</strong> ${company}</li>
               <li><strong>Phone:</strong> ${phone}</li>
               <li><strong>Message:</strong> ${message}</li>
             </ul>
-            <p>To ensure our emails reach your inbox, please add <a href="mailto:${config.email.user}">${config.email.user}</a> to your contacts.</p>
-            <p>Have questions? Reply to this email!</p>
-            <p>Best regards,<br>Top Digital Team</p>
+            <p>Please add <a href="mailto:${config.email.user}">${config.email.user}</a> to your contacts to receive our emails in your inbox.</p>
+            <p>Questions? Just reply to this email!</p>
+            <p>Best,<br>Top Digital Team</p>
             <hr>
             <p style="font-size: 12px; color: #777;">
               Top Digital | 123 Business Ave, Digital City<br>
@@ -176,14 +176,14 @@ app.post('/api/submit', async (req, res) => {
           `,
           text: `
             Hello ${name},\n\n
-            Thank you for contacting Top Digital! We’ve received your submission and will respond within 24-48 hours.\n\n
-            Your Submission:\n
+            Thank you for reaching out to Top Digital! We’ve received your submission and will get back to you within 24 hours.\n\n
+            Your Details:\n
             - Company: ${company}\n
             - Phone: ${phone}\n
             - Message: ${message}\n\n
-            To ensure our emails reach your inbox, please add ${config.email.user} to your contacts.\n\n
-            Have questions? Reply to this email!\n\n
-            Best regards,\n
+            Please add ${config.email.user} to your contacts to receive our emails in your inbox.\n\n
+            Questions? Just reply to this email!\n\n
+            Best,\n
             Top Digital Team\n\n
             ---
             Top Digital | 123 Business Ave, Digital City
@@ -196,6 +196,7 @@ app.post('/api/submit', async (req, res) => {
             'Importance': 'Normal',
             'List-Unsubscribe': `<mailto:unsubscribe@${config.email.user}?subject=unsubscribe>`,
             'Precedence': 'bulk',
+            'X-Entity-Ref-ID': `form-${result.insertId}`,
           },
         };
 
@@ -209,9 +210,9 @@ app.post('/api/submit', async (req, res) => {
             break;
           } catch (emailError) {
             attempts++;
-            console.error(`Email attempt ${attempts} failed:`, emailError);
+            console.error(`Form email attempt ${attempts} failed:`, emailError);
             if (attempts === maxAttempts) {
-              console.error('Max email attempts reached.');
+              console.error('Max form email attempts reached.');
               break;
             }
             await new Promise((resolve) => setTimeout(resolve, 2000 * attempts));
@@ -274,13 +275,77 @@ app.post('/api/newsletter', async (req, res) => {
     );
 
     await connection.commit();
+
+    // Send newsletter confirmation email
+    const mailOptions = {
+      from: `"Top Digital" <${config.email.user}>`,
+      to: email,
+      replyTo: config.email.user,
+      subject: `Welcome to Top Digital’s Newsletter!`,
+      html: `
+        <h2>Welcome aboard!</h2>
+        <p>Thank you for subscribing to Top Digital’s newsletter. You’ll receive the latest updates, tips, and offers straight to your inbox.</p>
+        <p><strong>Your Email:</strong> ${email}</p>
+        <p>To ensure our emails land in your primary inbox, please add <a href="mailto:${config.email.user}">${config.email.user}</a> to your contacts.</p>
+        <p>Questions or feedback? Reply to this email!</p>
+        <p>Best,<br>Top Digital Team</p>
+        <hr>
+        <p style="font-size: 12px; color: #777;">
+          Top Digital | 123 Business Ave, Digital City<br>
+          <a href="https://topdigital.netlify.app">Visit our website</a> | 
+          <a href="mailto:support@topdigital.com">Contact Support</a><br>
+          <a href="mailto:unsubscribe@${config.email.user}?subject=unsubscribe">Unsubscribe</a>
+        </p>
+      `,
+      text: `
+        Welcome aboard!\n\n
+        Thank you for subscribing to Top Digital’s newsletter. You’ll receive the latest updates, tips, and offers straight to your inbox.\n\n
+        Your Email: ${email}\n\n
+        To ensure our emails land in your primary inbox, please add ${config.email.user} to your contacts.\n\n
+        Questions or feedback? Reply to this email!\n\n
+        Best,\n
+        Top Digital Team\n\n
+        ---
+        Top Digital | 123 Business Ave, Digital City
+        Visit: https://topdigital.netlify.app | Support: support@topdigital.com
+        Unsubscribe: mailto:unsubscribe@${config.email.user}?subject=unsubscribe
+      `,
+      headers: {
+        'X-Priority': '3',
+        'X-MSMail-Priority': 'Normal',
+        'Importance': 'Normal',
+        'List-Unsubscribe': `<mailto:unsubscribe@${config.email.user}?subject=unsubscribe>`,
+        'Precedence': 'bulk',
+        'X-Entity-Ref-ID': `newsletter-${subscriberId}`,
+      },
+    };
+
+    // Retry logic for newsletter email
+    let attempts = 0;
+    const maxAttempts = 3;
+    while (attempts < maxAttempts) {
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log('Newsletter confirmation sent to:', email);
+        break;
+      } catch (emailError) {
+        attempts++;
+        console.error(`Newsletter email attempt ${attempts} failed:`, emailError);
+        if (attempts === maxAttempts) {
+          console.error('Max newsletter email attempts reached.');
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000 * attempts));
+      }
+    }
+
     res.status(200).json({ status: 'success', message: 'Subscribed successfully' });
   } catch (error) {
     if (connection) await connection.rollback();
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ status: 'error', message: 'Email already subscribed' });
     }
-    console.error('Database error:', error);
+    console.error('Database or Email error:', error);
     res.status(500).json({ status: 'error', message: 'Server error' });
   } finally {
     if (connection) connection.release();
