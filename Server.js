@@ -12,7 +12,8 @@ const app = express();
 // CORS configuration
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://topdigital.netlify.app',
+  'https://topdigitalbackend.onrender.com',
+  "https://rivetsking.com"
 ];
 app.use(
   cors({
