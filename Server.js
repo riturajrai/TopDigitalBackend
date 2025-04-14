@@ -4,11 +4,12 @@ const formidable = require('formidable');
 const axios = require('axios');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
-const config = require('./config');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const app = express();
-// ✅ Define allowed frontend URLs
+
+// CORS configuration
 const allowedOrigins = [
   'http://localhost:5173',
   'https://topdigitalbackend.onrender.com',
@@ -16,11 +17,9 @@ const allowedOrigins = [
   'https://www.rivetsking.com',
   'https://intopdigital-adminpanel.netlify.app' // 👈 ADD THIS LINE
 ];
-
 app.use(
   cors({
     origin: (origin, callback) => {
-      console.log('Incoming origin:', origin); // Optional for debugging
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -28,17 +27,17 @@ app.use(
       }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true, // set to true if you are using cookies or authentication
+    credentials: false,
   })
 );
 app.use(express.json());
 
 // MySQL pool
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'your_password',
+  database: process.env.DB_NAME || 'admin_panel',
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
@@ -58,8 +57,8 @@ pool
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: config.email.user,
-    pass: config.email.pass,
+    user: process.env.EMAIL_USER || 'your_email@gmail.com',
+    pass: process.env.EMAIL_PASS || 'your_app_password',
   },
   debug: true,
   logger: true,
@@ -148,9 +147,9 @@ app.post('/api/submit', async (req, res) => {
 
         // Send thank you email
         const mailOptions = {
-          from: `"Top Digital" <${config.email.user}>`,
+          from: `"Top Digital" <${process.env.EMAIL_USER}>`,
           to: email,
-          replyTo: config.email.user,
+          replyTo: process.env.EMAIL_USER,
           subject: `Hi ${name}, Thanks for Contacting Top Digital!`,
           html: `
             <h2>Hello ${name},</h2>
@@ -161,7 +160,7 @@ app.post('/api/submit', async (req, res) => {
               <li><strong>Phone:</strong> ${phone}</li>
               <li><strong>Message:</strong> ${message}</li>
             </ul>
-            <p>Please add <a href="mailto:${config.email.user}">${config.email.user}</a> to your contacts to receive our emails in your inbox.</p>
+            <p>Please add <a href="mailto:${process.env.EMAIL_USER}">${process.env.EMAIL_USER}</a> to your contacts to receive our emails in your inbox.</p>
             <p>Questions? Just reply to this email!</p>
             <p>Best,<br>Top Digital Team</p>
             <hr>
@@ -169,7 +168,7 @@ app.post('/api/submit', async (req, res) => {
               Top Digital | 123 Business Ave, Digital City<br>
               <a href="https://topdigital.netlify.app">Visit our website</a> | 
               <a href="mailto:support@topdigital.com">Contact Support</a><br>
-              <a href="mailto:unsubscribe@${config.email.user}?subject=unsubscribe">Unsubscribe</a>
+              <a href="mailto:unsubscribe@${process.env.EMAIL_USER}?subject=unsubscribe">Unsubscribe</a>
             </p>
           `,
           text: `
@@ -179,20 +178,20 @@ app.post('/api/submit', async (req, res) => {
             - Company: ${company}\n
             - Phone: ${phone}\n
             - Message: ${message}\n\n
-            Please add ${config.email.user} to your contacts to receive our emails in your inbox.\n\n
+            Please add ${process.env.EMAIL_USER} to your contacts to receive our emails in your inbox.\n\n
             Questions? Just reply to this email!\n\n
             Best,\n
             Top Digital Team\n\n
             ---
             Top Digital | 123 Business Ave, Digital City
             Visit: https://topdigital.netlify.app | Support: support@topdigital.com
-            Unsubscribe: mailto:unsubscribe@${config.email.user}?subject=unsubscribe
+            Unsubscribe: mailto:unsubscribe@${process.env.EMAIL_USER}?subject=unsubscribe
           `,
           headers: {
             'X-Priority': '3',
             'X-MSMail-Priority': 'Normal',
             'Importance': 'Normal',
-            'List-Unsubscribe': `<mailto:unsubscribe@${config.email.user}?subject=unsubscribe>`,
+            'List-Unsubscribe': `<mailto:unsubscribe@${process.env.EMAIL_USER}?subject=unsubscribe>`,
             'Precedence': 'bulk',
             'X-Entity-Ref-ID': `form-${result.insertId}`,
           },
@@ -276,15 +275,15 @@ app.post('/api/newsletter', async (req, res) => {
 
     // Send newsletter confirmation email
     const mailOptions = {
-      from: `"Top Digital" <${config.email.user}>`,
+      from: `"Top Digital" <${process.env.EMAIL_USER}>`,
       to: email,
-      replyTo: config.email.user,
+      replyTo: process.env.EMAIL_USER,
       subject: `Welcome to Top Digital’s Newsletter!`,
       html: `
         <h2>Welcome aboard!</h2>
         <p>Thank you for subscribing to Top Digital’s newsletter. You’ll receive the latest updates, tips, and offers straight to your inbox.</p>
         <p><strong>Your Email:</strong> ${email}</p>
-        <p>To ensure our emails land in your primary inbox, please add <a href="mailto:${config.email.user}">${config.email.user}</a> to your contacts.</p>
+        <p>To ensure our emails land in your primary inbox, please add <a href="mailto:${process.env.EMAIL_USER}">${process.env.EMAIL_USER}</a> to your contacts.</p>
         <p>Questions or feedback? Reply to this email!</p>
         <p>Best,<br>Top Digital Team</p>
         <hr>
@@ -292,27 +291,27 @@ app.post('/api/newsletter', async (req, res) => {
           Top Digital | 123 Business Ave, Digital City<br>
           <a href="https://topdigital.netlify.app">Visit our website</a> | 
           <a href="mailto:support@topdigital.com">Contact Support</a><br>
-          <a href="mailto:unsubscribe@${config.email.user}?subject=unsubscribe">Unsubscribe</a>
+          <a href="mailto:unsubscribe@${process.env.EMAIL_USER}?subject=unsubscribe">Unsubscribe</a>
         </p>
       `,
       text: `
         Welcome aboard!\n\n
         Thank you for subscribing to Top Digital’s newsletter. You’ll receive the latest updates, tips, and offers straight to your inbox.\n\n
         Your Email: ${email}\n\n
-        To ensure our emails land in your primary inbox, please add ${config.email.user} to your contacts.\n\n
+        To ensure our emails land in your primary inbox, please add ${process.env.EMAIL_USER} to your contacts.\n\n
         Questions or feedback? Reply to this email!\n\n
         Best,\n
         Top Digital Team\n\n
         ---
         Top Digital | 123 Business Ave, Digital City
         Visit: https://topdigital.netlify.app | Support: support@topdigital.com
-        Unsubscribe: mailto:unsubscribe@${config.email.user}?subject=unsubscribe
+        Unsubscribe: mailto:unsubscribe@${process.env.EMAIL_USER}?subject=unsubscribe
       `,
       headers: {
         'X-Priority': '3',
         'X-MSMail-Priority': 'Normal',
         'Importance': 'Normal',
-        'List-Unsubscribe': `<mailto:unsubscribe@${config.email.user}?subject=unsubscribe>`,
+        'List-Unsubscribe': `<mailto:unsubscribe@${process.env.EMAIL_USER}?subject=unsubscribe>`,
         'Precedence': 'bulk',
         'X-Entity-Ref-ID': `newsletter-${subscriberId}`,
       },
@@ -488,8 +487,6 @@ app.delete('/api/submissions/:id', async (req, res) => {
   }
 });
 
-
-
 // DELETE endpoint to remove a subscriber
 app.delete('/api/subscribers/:id', async (req, res) => {
   let connection;
@@ -526,6 +523,69 @@ app.delete('/api/subscribers/:id', async (req, res) => {
       connection.release();
     }
   }
+});
+
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required' });
+  }
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [rows] = await connection.execute('SELECT * FROM admins WHERE email = ?', [email]);
+
+    if (rows.length === 0) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const admin = rows[0];
+
+    // Verify password (plain text comparison)
+    if (password !== admin.password) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // Generate JWT
+    const token = jwt.sign({ id: admin.id, email: admin.email }, JWT_SECRET, {
+      expiresIn: '2h',
+    });
+
+    res.json({ token });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+app.put('/api/profile', async (req, res) => {
+  const { name, email, phone } = req.body;
+  const token = req.headers.authorization?.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const connection = await pool.getConnection();
+    await connection.execute(
+      'UPDATE admins SET name = ?, email = ?, phone = ? WHERE id = ?',
+      [name, email, phone, decoded.id]
+    );
+    connection.release();
+    res.json({ message: 'Profile updated' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Error handling
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ status: 'error', message: 'An unexpected error occurred' });
 });
 
 // Error handling
