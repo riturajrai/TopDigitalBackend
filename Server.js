@@ -8,16 +8,17 @@ const config = require('./config');
 require('dotenv').config();
 
 const app = express();
-
-// CORS configuration
+// ✅ Define allowed frontend URLs
 const allowedOrigins = [
   'http://localhost:5173',
   'https://topdigitalbackend.onrender.com',
-  "https://rivetsking.com"
+  'https://rivetsking.com',
+  'https://www.rivetsking.com' // included www version just in case
 ];
 app.use(
   cors({
     origin: (origin, callback) => {
+      console.log('Incoming origin:', origin); // Optional for debugging
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -25,7 +26,7 @@ app.use(
       }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: false,
+    credentials: true, // set to true if you are using cookies or authentication
   })
 );
 app.use(express.json());
