@@ -13,8 +13,10 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://topdigitalbackend.onrender.com',
   'https://rivetsking.com',
-  'https://www.rivetsking.com' // included www version just in case
+  'https://www.rivetsking.com',
+  'https://intopdigital-adminpanel.netlify.app' // 👈 ADD THIS LINE
 ];
+
 app.use(
   cors({
     origin: (origin, callback) => {
