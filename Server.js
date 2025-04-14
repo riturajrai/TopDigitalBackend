@@ -11,9 +11,8 @@ const app = express();
 
 // CORS configuration
 const allowedOrigins = [
-  'http://localhost:5175',
+  'http://localhost:5173',
   'https://topdigital.netlify.app',
-  'https://rivetsking.com',
 ];
 app.use(
   cors({
@@ -24,7 +23,7 @@ app.use(
         callback(new Error('Not allowed by CORS'));
       }
     },
-    methods: ['POST'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: false,
   })
 );
@@ -53,10 +52,10 @@ pool
 
 // Nodemailer setup
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // Uses port 587 with STARTTLS
+  service: 'gmail',
   auth: {
-    user: config.email.user, // intopdigital.com@gmail.com
-    pass: config.email.pass, // ivhd ciju xydc mwef
+    user: config.email.user,
+    pass: config.email.pass,
   },
   debug: true,
   logger: true,
@@ -64,7 +63,7 @@ const transporter = nodemailer.createTransport({
   maxConnections: 1,
   rateLimit: 5,
   tls: {
-    rejectUnauthorized: false, // Temporary bypass
+    rejectUnauthorized: false,
   },
 });
 
@@ -95,7 +94,6 @@ app.post('/api/submit', async (req, res) => {
     const recaptcha_response = Array.isArray(fields.recaptcha_response)
       ? fields.recaptcha_response[0]
       : fields.recaptcha_response || '';
-    const agreement = Array.isArray(fields.agreement) ? fields.agreement[0] : fields.agreement || 'false';
 
     console.log('Form fields:', {
       name,
@@ -104,15 +102,10 @@ app.post('/api/submit', async (req, res) => {
       phone,
       message,
       recaptcha_response: recaptcha_response ? recaptcha_response.substring(0, 10) + '...' : 'missing',
-      agreement,
     });
 
     if (!name || !email || !company || !phone || !message || !recaptcha_response) {
       return res.status(400).json({ status: 'error', message: 'All fields are required' });
-    }
-
-    if (agreement !== 'true') {
-      return res.status(400).json({ status: 'error', message: 'You must agree to the terms' });
     }
 
     try {
@@ -144,8 +137,8 @@ app.post('/api/submit', async (req, res) => {
       const connection = await pool.getConnection();
       try {
         const [result] = await connection.execute(
-          'INSERT INTO submissions (name, email, company, phone, message, agreement, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
-          [name, email, company, phone, message, agreement === 'true']
+          'INSERT INTO submissions (name, email, company, phone, message, created_at, status) VALUES (?, ?, ?, ?, ?, NOW(), ?)',
+          [name, email, company, phone, message, 'New']
         );
         console.log('Submission saved:', { id: result.insertId });
 
@@ -271,7 +264,7 @@ app.post('/api/newsletter', async (req, res) => {
     }
 
     await connection.execute(
-      'INSERT INTO subscriptions (subscriber_id, status) VALUES (?, ?)',
+      'INSERT INTO subscriptions (subscriber_id, status, created_at) VALUES (?, ?, NOW())',
       [subscriberId, 'active']
     );
 
@@ -350,6 +343,184 @@ app.post('/api/newsletter', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Server error' });
   } finally {
     if (connection) connection.release();
+  }
+});
+
+// GET endpoint to fetch all subscribers
+app.get('/api/subscribers', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [rows] = await connection.execute(
+      `SELECT s.id, s.email, sub.created_at, sub.status 
+       FROM subscribers s 
+       LEFT JOIN subscriptions sub ON s.id = sub.subscriber_id 
+       ORDER BY COALESCE(sub.created_at, '2000-01-01') DESC`
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching subscribers:', {
+      message: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch subscribers',
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// GET endpoint to fetch all submissions
+app.get('/api/submissions', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [rows] = await connection.execute(
+      'SELECT id, name, email, company, phone, message, created_at, status FROM submissions ORDER BY created_at DESC'
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching submissions:', {
+      message: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch submissions',
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// PUT endpoint to update submission status
+app.put('/api/submissions/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status || !['New', 'Contacted', 'Closed'].includes(status)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid status value',
+      });
+    }
+
+    connection = await pool.getConnection();
+    const [result] = await connection.execute(
+      'UPDATE submissions SET status = ? WHERE id = ?',
+      [status, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Submission not found',
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Status updated successfully',
+    });
+  } catch (error) {
+    console.error('Error updating submission status:', {
+      message: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to update status',
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+// DELETE endpoint to remove a submission
+app.delete('/api/submissions/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    connection = await pool.getConnection();
+    const [result] = await connection.execute(
+      'DELETE FROM submissions WHERE id = ?',
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Submission not found',
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Submission deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting submission:', {
+      message: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete submission',
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+});
+
+
+
+// DELETE endpoint to remove a subscriber
+app.delete('/api/subscribers/:id', async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params;
+    connection = await pool.getConnection();
+    const [result] = await connection.execute(
+      'DELETE FROM subscribers WHERE id = ?',
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Subscriber not found',
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'Subscriber deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting subscriber:', {
+      message: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to delete subscriber',
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 
