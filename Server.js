@@ -15,7 +15,8 @@ const allowedOrigins = [
   'https://topdigitalbackend.onrender.com',
   'https://rivetsking.com',
   'https://www.rivetsking.com',
-  'https://intopdigital-adminpanel.netlify.app' // 👈 ADD THIS LINE
+  'https://intopdigital-adminpanel.netlify.app', // 👈 ADD THIS LINE
+  'https://jobleaaye.netlify.app'
 ];
 app.use(
   cors({
